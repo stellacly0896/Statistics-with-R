@@ -1,0 +1,205 @@
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(BAS)
+```
+
+### Load data
+
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+* * *
+
+## Part 1: Data
+This dataset is randomly selected from IMDB and Rotten Tomatoes, containing information about 651 movies produced before 2016. Since the sampling size is large enough and less than 10% of the population, plus the sampling was random, we can generalize these results to all movies produced before 2016 in these two websites. 
+
+As there is no random assignment performed, the study is observational and hence no conclusions about causality can be made.Instead, the results could be used to demonstrate correlation.
+* * *
+
+## Part 2: Data manipulation
+We are going to create required features, feature_film, drama, mpaa_rating_R, oscar_season and summer_season.
+
+
+Feature_film: movies that are feature films:
+```{r}
+movies$feature_film<-ifelse(movies$title_type == 'Feature Film',c('yes'),c('no'))
+```
+
+Drama: movies whose genre is drama:
+```{r}
+movies$drama<-ifelse(movies$genre == 'Drama',c('yes'),c('no'))
+```
+
+mpaa_rating_R: movies that are R rated:
+```{r}
+movies$mpaa_rating_R<-ifelse(movies$mpaa_rating== 'R',c('yes'),c('no'))
+```
+
+oscar_season: movies that are released from October to December:
+```{r}
+movies$oscar_season<-ifelse(movies$thtr_rel_month %in% 10:12, 'yes','no')
+```
+
+summer_season: movies that are released from May to August:
+```{r}
+movies$summer_season<-ifelse(movies$thtr_rel_month %in% 5:8, 'yes','no')
+```
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+First of all, we examine our response variable of interest audience_score:
+
+```{r}
+summary(movies$audience_score)
+```
+
+As shown above, the mean audience_score is 62.35 and the median is 65. 
+
+```{r}
+ggplot(data=movies, aes (x = audience_score)) + geom_histogram(binwidth=5)
+```
+
+It appears that the data is slightly left skewed. 
+
+Now we perform an analysis of the relationships between audience score and newly featured variables by creating boxplots and credible interval.
+
+1. the relatinship bewween audience_score and feature_film:
+```{r}
+boxplot(audience_score~feature_film, data = movies)
+```
+
+It appears that feature films have relatively lower audience score.
+
+```{r}
+bayes_inference(y=audience_score,x=feature_film, data = movies, statistic = 'mean', type = 'ci')
+```
+We can see the credible interval proves that there is indeed difference existing between these two grouops. 
+
+For other variables, we conduct the same analysis. 
+
+2. the relationship between audience score and the genre of the movie.
+
+```{r}
+boxplot(audience_score~drama, data = movies)
+```
+
+```{r}
+bayes_inference(y=audience_score,x=drama, data = movies, statistic = 'mean', type = 'ci')
+```
+
+The average score of drama films are slightly higher than other genres, and credible interval proves the difference between two groups.
+
+
+3. the relationship between audience score and mpaa rating.
+```{r}
+boxplot(audience_score~mpaa_rating_R, data = movies)
+```
+
+```{r}
+bayes_inference(y=audience_score,x=mpaa_rating_R, data = movies, statistic = 'mean', type = 'ci')
+```
+
+The plots demonstrate that the difference between R rated and non-R rated films is not significant. 
+
+
+4. the relationship between audience score and the time of the movie released.
+```{r}
+boxplot(audience_score~oscar_season, data = movies)
+```
+
+```{r}
+bayes_inference(y=audience_score,x=oscar_season, data = movies, statistic = 'mean', type = 'ci')
+```
+
+The difference in the average audience score for movies released in oscar season and those who are not is small, and the credible interval contains 0.
+
+```{r}
+boxplot(audience_score~summer_season, data = movies)
+```
+
+```{r}
+bayes_inference(y=audience_score,x=summer_season, data = movies, statistic = 'mean', type = 'ci')
+```
+
+There is almost no difference in the average audience between films released during the summer season and those who are not. The credible interval contains 0. 
+
+* * *
+
+## Part 4: Modeling
+
+First of all, we remove N/A in the dataset.
+```{r}
+data_movies = na.omit(movies)
+```
+
+To build a model we will use all the requested variables and Bayesian Model Averaging(BMA) method to find the optimal model and optimal variables. We choose the ZS-null as a priorto assign equal weight to all of the models. 
+
+```{r}
+movies_bma <- bas.lm(audience_score~ feature_film + drama + runtime + mpaa_rating_R + thtr_rel_year + oscar_season + summer_season + imdb_rating + imdb_num_votes + critics_score + best_pic_nom + best_pic_win + best_actor_win + best_actress_win + best_dir_win + top200_box, data = data_movies, prior = "ZS-null", modelprior = uniform(),method = 'BAS')
+summary(movies_bma)
+```
+
+
+For model diagnostic, We now examine the residuals:
+
+```{r}
+plot(movies_bma, which = 1)
+```
+
+The residuals appear to be randomly distributed around 0. For low BMA predictions, some resuals are larger and observations 126, 216 and 251 appear to be outliers. 
+
+```{r}
+plot(movies_bma, which = 4)
+```
+
+
+As the inclusion plot shows, the optimal model has 4 coefficients: the intercept, the runtime, tne IMDB rating and the critics score. They all have a probability of inclusion greater than 0.5. 
+
+Now we visualize the model rank:
+```{r}
+image(movies_bma, rotate = F)
+```
+
+IMDB rating and critic scores are the most widely used variables.
+
+
+Now let us look at the coefficients.
+```{r}
+coef <- coefficients(movies_bma)
+confint(coef)
+```
+
+To address our research question, the coefficients' credible intervals shows that among 3 variables which are included in the optimal model, IMDB rating and critics scores are positively associated with the audience score.
+* * *
+
+## Part 5: Prediction
+
+The movie we choose to predict is Arrival, which was released on 2016. The data for Arrival is from 
+http://www.imdb.com/title/tt2543164/?ref_=nv_sr_1
+https://www.rottentomatoes.com/m/arrival_2016
+The audience score is 82, the critics score is 94, and IMDB rating is 7.9
+
+```{r}
+arrival <- data.frame(imdb_rating = 7.9, critics_score = 94)
+fit <- bas.lm(audience_score~imdb_rating + critics_score, data = movies)
+movie_2016 <- predict(fit,newdata = arrival, interval = 'confidence')
+movie_2016$fit
+```
+
+The predicted audience score is 85.6, not very different the actual score 82.
+
+
+* * *
+
+## Part 6: Conclusion
+This report goes through the process of creating a bayesian regression model that can be used to find out what factors make a movie popular. Using BMA method, the two variables for the optimal model are critic scores and IMDB rating. In the prediction section, our model did a great job. We have noticed that there are a few outliers in the lower bound of audience score, so there is still some space to make the model more accurate. 

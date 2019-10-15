@@ -1,0 +1,101 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+```
+
+### Load data
+
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+* * *
+
+## Part 1: Data
+The data used in this project comes from General Social Survey (GSS), a survey that records demographic information and attitudes towards various social issues since 1972. The survey is conducted through in-person interviews of randomly selected adults living in households in the U.S. Since the intention of GSS is to gather clear and unbiased data and provide them to any interested parties, the method conducted by GSS is mainly randomly sampling and thus can be generalized to the broad US population. Because this is an observational study, the results cannot be used to infer casuality but only association. 
+The dataset includes 57061 observations across 114 variables. 
+* * *
+
+## Part 2: Research question
+Due to the historical and social contexts, the existence of racial wage gap has long been persistent in American history. In modern society, despite some progress, the gap still persists, according to Pew Research Center [https://www.pewresearch.org/fact-tank/2016/07/01/racial-gender-wage-gaps-persist-in-u-s-despite-some-progress/].The wealth divide is rooted in the foundation of American history. After all, the American economy was built on slave labor. Ultimately, today's wage gaps are the culmination of decades of discriminatory policy and outright racism [https://www.forbes.com/sites/rakeenmabud/2019/05/15/what-voters-need-to-know-about-the-racial-wealth-gap/#89e155637558]. Understanding the phenomena of racial wage gap is an important part of understanding racial inequality in the U.S. Therefore, I am interested in drawing statistical inference to compare family income between different races using GSS data. 
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+Variables to be used:
+Race - race of respondent
+Coninc - Total family income in constant dollars.
+
+```{r}
+summary(gss$race)
+```
+
+```{r}
+summary(gss$coninc)
+```
+
+The mean income is $44503 and 50% of oservations are in the $18445 - $59542 range.
+Remove NA values in coninc.
+
+```{r}
+gss_1<-gss%>% filter(!(is.na(race)),!(is.na(coninc)))
+```
+
+
+```{r}
+boxplot(coninc~race,data=gss_1,xlab="Race of Respondent",ylab = "Total Family Income ")
+by(gss_1$coninc,gss_1$race,summary)
+```
+
+As the boxplot shows, the distribution of total family income in constant dollars is right-skewed.
+We can see that there is difference in wages among different races. The White group has highest total family income in 1st quartile, median, mean and 3rd quartile. The Black group has lowest variability. 
+We need to find whether the difference is purely due to chance or there is an actual relationship between the wages and races. 
+* * *
+
+## Part 4: Inference
+
+### State hypotheses
+H0: The average total family income is the same among different races.
+HA: The average total family income is different in at least one pair of different races.
+
+### State the method to be used and why and how
+We are going to compare more than two means, so we use ANOVA (Analysis of Variance).It uses an F statistic, whose value can help us decide to reject the null hypothesis or not. 
+
+### Check conditions
+As the part1 mentioned, the respondents are random sampled and they made up for less than 10% of population, therefore, the condition of independence within group is met. The race groups are independent from each other so the condition of independence between groups is met, too.
+
+The part 3 mentioned that the distribution of the total family income across all groups is right-skewed, but the sample size is large, so this may not be an important violation of conditions. 
+
+ANOVA requires As for the variance, as the boxplot shows the variance is approximately equal between the White group and the Other group. However, it is much lower for the Black group. 
+
+Even if the conditions of ANOVA have not all been met, I will still use ANOVA but be very careful in interpreting the results. 
+
+### perform inference
+
+```{r}
+inference(coninc,race,data = gss[!is.na(gss$coninc),], type = 'ht',statistic = 'mean',method = 'theoretical', alternative='greater')
+```
+
+# Interpret results
+We can see the F statistic is 675.0779, and the p-values for all three pairs are very small, thus we can reject the null hypothesis and accept that according to GSS data, there indeed is an difference in total family income among different races. 
+
+The pair-wise t-test results show that the p-values for all three pairs are very small, so we can conclude that there are wage gaps among different races in the United States.
+
+After acknowledging the existence of racial wage gaps, in the further research, we may include a more comprehensive number of races, and also determine what factors contribute to the wage gaps. 

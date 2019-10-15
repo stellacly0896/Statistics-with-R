@@ -1,0 +1,238 @@
+---
+title: "Modeling and prediction for movies"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(statsr)
+library(magrittr)
+library(corrplot)
+```
+
+### Load data
+
+Make sure your data and R Markdown files are in the same directory. When loaded
+your data file will be called `movies`. Delete this note when before you submit 
+your work. 
+
+```{r load-data}
+load("movies.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+The dataset is comprised of 651 randomly sampled movies produced and released before 2016.Other information about the movies such as the type, genre, runtime, studio, released time, critics rating, audience rating, oscar winning and so on. These movies are randomly sampled from websites IMDb and Rotten Tomatoes. Because of the randomness of selection and the size of dataset, the results should be generalizable to all U.S. movies released before 2016. Since the data are observational, thus only correlation can be drawn. 
+The potential bias is that the the audiance rating is limited to only two resources(IMDb or Rotten Tomato), some people might have watched these movies but did not rate. 
+* * *
+
+## Part 2: Research question
+
+Is a movie's popularity related to the type of the movie, genre, runtime, mpaa rating, oscar awards obtained(actor,actress,director and picture) and theater release month? 
+
+Despite potential bias problems about audience rating mentioned above, at least the inference will tell us what movies are preferred by users from IMDb or Rotten Tomatoes. In addition, the number of audience in real life outnumbers that of critics. Therefore, to generalize to the greater population, the popularity of a movie in this analysis will be measured by audience score. 
+
+Finding answer for this question may help movie producing companies to find contributors to the popularity thus they can make good decisions.
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+First of all, we will create a subset of the original dataset with only the variables of interest and eliminating all NAs. 
+
+```{r}
+movies_new <- movies %>% select(audience_score, title_type, genre, runtime, mpaa_rating, thtr_rel_month, best_pic_win, best_actor_win, best_actress_win,best_dir_win) %>% filter(runtime != "NA")
+```
+
+```{r}
+summary(movies_new)
+```
+
+###histogram of the response variable
+
+```{r}
+ggplot(movies_new, aes(x = audience_score)) + geom_histogram() + xlab("Audience Score") + ylab("Count") + ggtitle("Histogram of Audience Score")
+summary(movies_new$audience_score)
+
+```
+
+
+As we can see the distribution of audience_score is slightly left-skewed. 
+
+### Correlation between numerical variables and audience score
+In the variables we include in our dataset, only runtime and thtr_rel_month are numerical.
+
+We use scatterplots for our representation.
+
+```{r}
+num_var <- names(movies_new) %in% c('runtime','thtr_rel_month')
+movies_new_var <- movies_new[num_var]
+corr.matrix <- cor(movies_new_var)
+corrplot(corr.matrix, main = 'Correlation plot for numerical variables', method ='number')
+```
+
+From the correlation plot, we can tell the numerical variables we are going to use are not significantly related, so the collinearity could be avoided.
+
+
+### Correlation between categorical variables and audience score
+Except runtime and thtr_rel_month, other variables are categorical 
+
+```{r}
+ggplot(movies_new,aes(x = title_type , y = audience_score)) + geom_boxplot() + xlab('Title Type') + ylab('Audience Score') + ggtitle('Audience Score vs. Title Type')
+by(movies_new$audience_score,movies_new$title_type,summary)
+```
+
+```{r}
+ggplot(movies_new,aes(x = genre, y = audience_score)) + geom_boxplot() + xlab('Genre') + ylab('Audience Score') + ggtitle('Audience Score vs. Genre')+theme(axis.text.x = element_text(angle= -45, hjust=0))
+by(movies_new$audience_score,movies_new$genre,summary)
+```
+
+```{r}
+ggplot(movies_new,aes(x = mpaa_rating, y = audience_score)) + geom_boxplot() + xlab('MPAA Rating') + ylab('Audience Score') + ggtitle('Audience Score vs. MPAA Rating')
+by(movies_new$audience_score,movies_new$mpaa_rating,summary)
+```
+
+```{r}
+ggplot(movies_new,aes(x = best_pic_win, y = audience_score)) + geom_boxplot() + xlab('Oscar Best Picture') + ylab('Audience Score') + ggtitle('Audience Score vs. Oscar Best Picture')
+by(movies_new$audience_score,movies_new$best_pic_win,summary)
+```
+```{r}
+ggplot(movies_new,aes(x = best_actor_win, y = audience_score)) + geom_boxplot() + xlab('Oscar Best Actor') + ylab('Audience Score') + ggtitle('Audience Score vs. Oscar Best Actor')
+by(movies_new$audience_score,movies_new$best_actor_win,summary)
+```
+
+```{r}
+ggplot(movies_new,aes(x = best_actress_win, y = audience_score)) + geom_boxplot() + xlab('Oscar Best Actress') + ylab('Audience Score') + ggtitle('Audience Score vs. Oscar Best Actress')
+by(movies_new$audience_score,movies_new$best_actress_win,summary)
+```
+```{r}
+ggplot(movies_new,aes(x = best_dir_win, y = audience_score)) + geom_boxplot() + xlab('Oscar Best Director') + ylab('Audience Score') + ggtitle('Audience Score vs. Oscar Best Director')
+by(movies_new$audience_score,movies_new$best_dir_win,summary)
+```
+
+From these representations we find that whether a movie wins Oscar Best Actor or Actress do not appear to have significant correlation with audience score, but this is a correct assumption is going to be determined later in the modelling section.
+
+* * *
+
+## Part 4: Modeling
+
+To select a parsimonious model and answer our research question, we will perform a backward elimination based on p-value. I will eliminate the variables that are not statistically significant at 0.05 level.
+
+###Full model
+First, we create a model with all variables of interest to predict the response variable. 
+
+```{r}
+full_model <- lm(audience_score ~ title_type + genre + runtime + mpaa_rating + thtr_rel_month + best_pic_win + best_dir_win + best_actor_win + best_actress_win, data = movies_new)
+summary(full_model)
+```
+
+The adjusted R-squared of the full model is 0.2262, whereas R-squared is 0.2536. This is because R squared supposes that every predictor in the model affects the response variable (in fact some of them are not).
+
+The first variable to be eliminated is month of release (thtr_rel_month).
+
+```{r}
+m1 = lm(audience_score ~ title_type + genre + runtime + mpaa_rating + best_pic_win + best_dir_win + best_actor_win + best_actress_win, data = movies_new)
+summary(m1)
+```
+
+The adjusted R squared has increased to 0.2272. The next variable to be eliminated is best_actress_win.
+
+```{r}
+m2 = lm(audience_score ~  title_type + genre + runtime + mpaa_rating + best_pic_win + best_dir_win + best_actor_win, data = movies_new)
+summary(m2)
+```
+
+The adjusted R-squared has rised to 0.2284. The next variable we are going to remove is best_actor_win.
+
+```{r}
+m3 = lm(audience_score ~  title_type + genre + runtime + mpaa_rating + best_pic_win + best_dir_win, data = movies_new)
+summary(m3)
+```
+
+Now the adjusted R-squared has increased to 0.2294. The next variable to be eliminated is best_dir_win. 
+
+```{r}
+m4 = lm(audience_score ~  title_type + genre + runtime + mpaa_rating + best_pic_win, data = movies_new)
+summary(m4)
+```
+
+Now the adjusted R squared is 0.228, which is higher than that of the full model. However, since eliminating best_dir_win did not lead to the largest increase in the adjusted R squared, therefore it will be kept in our model.
+
+
+Some p-values in the summary statistics are higher than 0.05, but some levels of that variable are significant to the response variable(e.g. genreComedy has a p-value larger than 0.05, but because other levels of genre have p-values less than 0.05), thus we cannot remove them at all. 
+
+So the final model we have is m3, significant predictors to audience score are: title_type, genre, runtime, mpaa_rating, best_pic_win and best_dir_win.
+The adjusted R squared is 0.2294, meaning that the model explains 22.94% of the variability in the audience score, leaving nearly 77% variability unexplained. Therefore, this model does not have good predictive capability. 
+
+
+### Model Diagonistics
+Let us check the 4 assumptions for multiple linear regression model one by one:
+
+1.Linear relationships between numerical variables and the response variable
+
+The only numerical variable in our model is runtime.
+
+```{r}
+plot(m3$residuals~movies_new$runtime)
+```
+
+The residuals of the model against the movie runtime are scattered around 0, therefore this assumption is met.
+
+2.Nearly normal residuals
+```{r}
+#plot(m3$residuals)
+hist(m3$residuals)
+qqnorm(m3$residuals)
+qqline(m3$residuals)
+```
+
+We can see a nearly normal distribution of residuals centered at 0, even if with a bit skewness on the right side, this assumption is still met. 
+
+3. Constant variability of residuals
+```{r}
+plot(m3$residuals~m3$fitted)
+plot(abs(m3$residuals)~m3$fitted)
+```
+
+
+The first plot shows that the variability of the residuals decreases when the fitted values increase, this assumption might not be met, so we should be careful in our conclusion.
+
+4. Independence of residuals
+
+```{r}
+plot(m3$residuals)
+```
+
+There is no time series structure to be suspected, thus we can assume the independence of residuals. This assumption is met. 
+* * *
+
+## Part 5: Prediction
+
+The movie whose audience score we will try to predict is Moonlight, released in 2016. I am taking the data from Rotten Tomatoes [https://www.rottentomatoes.com/m/moonlight_2016]
+
+```{r}
+moonlight <- data.frame(title_type = 'Feature Film', genre = 'Drama', runtime = 110, mpaa_rating = 'R', best_pic_win = 'yes' , best_dir_win = 'no')
+predict(m3, newdata = moonlight, interval = 'prediction', level = 0.95)
+```
+
+The predicted audience score is 79.23 and we are 95% confident the score will fall between 41.51527 and 116.9473. The actual audience score is 79, which falls in the predicted range and very close to the predicted score. 
+* * *
+
+## Part 6: Conclusion
+In conclusion, using our model we can answer my research question, the popularity of a movie (measured by audience score) can be predicted by knowing its title type, genre, runtime, MPAA rating, and whether it has won an Oscar best picture or Director. My model can explain 22.94% of the variability in the audience score, which is low and for this reason the predicted interval is wide. 
+
+We should also be aware that the variability of the residuals did not exhibit a normal constant pattern. The assumptions for multiple linear regression have not been fully met, thus we should reserve some caution for this model. 
+
+The potential shortcoming is that the resources of the original dataset arelimited, so the model might be biased toward movies on IMDb and Rotten Tomatoes. To increase the model's predictive capability, further study may include data from movie threaters and some international movies.
